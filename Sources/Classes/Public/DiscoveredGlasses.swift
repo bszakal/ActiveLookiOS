@@ -50,25 +50,29 @@ public class DiscoveredGlasses {
     internal var connectionCallback: ((Glasses) -> Void)?
     internal var disconnectionCallback: (() -> Void)?
     internal var connectionErrorCallback: ((Error) -> Void)?
+    internal let deviceType: DeviceType
+    
 
     // MARK: - Initializers
 
-    internal init(peripheral: CBPeripheral, centralManager: CBCentralManager, advertisementData: [String: Any]) {
+    internal init(peripheral: CBPeripheral, centralManager: CBCentralManager, advertisementData: [String: Any], type: DeviceType) {
         self.identifier = peripheral.identifier
         self.name = (advertisementData["kCBAdvDataLocalName"] as? String) ?? "Unnamed glasses"
         self.manufacturerId = (advertisementData["kCBAdvDataManufacturerData"] as? Data)?.hexEncodedString() ?? "Unknown"
 
         self.peripheral = peripheral
         self.centralManager = centralManager
+        self.deviceType = type
     }
 
-    internal init(peripheral: CBPeripheral, centralManager: CBCentralManager, name: String, manufacturerId: String) {
+    internal init(peripheral: CBPeripheral, centralManager: CBCentralManager, name: String, manufacturerId: String, type: DeviceType) {
         self.identifier = peripheral.identifier
         self.name = name
         self.manufacturerId = manufacturerId
 
         self.peripheral = peripheral
         self.centralManager = centralManager
+        self.deviceType = type
     }
 
     internal init?(with serializedGlasses: SerializedGlasses, centralManager: CBCentralManager) {
@@ -95,6 +99,7 @@ public class DiscoveredGlasses {
 
         self.name = usG.name
         self.manufacturerId = usG.manId
+        self.deviceType = DeviceType(rawValue: usG.type) ?? .glasses
 
         self.centralManager = centralManager
     }

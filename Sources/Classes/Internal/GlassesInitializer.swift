@@ -76,14 +76,24 @@ internal class GlassesInitializer: NSObject, CBPeripheralDelegate {
         if glasses.peripheral.state != .connected {
             return false
         }
-
+        
         let di = glasses.getDeviceInformation()
 
-        let requiredProperties: [Any?] = [
+        let requiredPropertiesForAnyDeviceType: [Any?] = [
             rxCharacteristic, txCharacteristic, batteryLevelCharacteristic,
-            flowControlCharacteristic, sensorInterfaceCharacteristic, di.manufacturerName, di.modelNumber,
-            di.serialNumber, di.hardwareVersion, di.firmwareVersion, di.softwareVersion
+            flowControlCharacteristic, sensorInterfaceCharacteristic
         ]
+        
+        let requiredPropertiesForPhysicalGlasses: [Any?] = [
+            di.manufacturerName, di.modelNumber,di.serialNumber,
+            di.hardwareVersion, di.firmwareVersion, di.softwareVersion
+        ]
+        
+        var requiredProperties = requiredPropertiesForAnyDeviceType
+        
+        if glasses.deviceType == .glasses {
+            requiredProperties.append(contentsOf: requiredPropertiesForPhysicalGlasses)
+        }
 
         for prop in requiredProperties {
             if prop == nil {
@@ -91,7 +101,10 @@ internal class GlassesInitializer: NSObject, CBPeripheralDelegate {
             }
         }
         
-        updateParameters?.hardware = di.hardwareVersion!
+        if glasses.deviceType == .glasses {
+            //should trigger an error instead of crashing so client app can try to recover or at least not crash
+            updateParameters?.hardware = di.hardwareVersion!
+        }
 
         if !txCharacteristic!.isNotifying { return false }
 
@@ -285,6 +298,7 @@ internal class GlassesInitializer: NSObject, CBPeripheralDelegate {
                                 error.debugDescription, ", for characteristic: ", characteristic, "@ ", #line)))
             return
         }
+        print("DidDiscoverDescriptor")
     }
 
     public func peripheral(_ peripheral: CBPeripheral,
@@ -296,6 +310,6 @@ internal class GlassesInitializer: NSObject, CBPeripheralDelegate {
             print("error while updating notification state : \(desc) for characteristic: \(characteristic.uuid)")
             return
         }
-//        print("peripheral did update notification state for characteristic: \(characteristic) in: \(#fileID)")
+        print("peripheral did update notification state for characteristic: \(characteristic) in: \(#fileID)")
     }
 }

@@ -57,6 +57,8 @@ public class Glasses {
     internal var isIntentionalDisconnect: Bool = false
     
     internal let chunkSize: Int = 505
+    
+    internal let deviceType: DeviceType
 
     // MARK: - Fileprivate properties
 
@@ -176,7 +178,8 @@ public class Glasses {
                   identifier: UUID,
                   manufacturerId: String,
                   peripheral: CBPeripheral,
-                  centralManager: CBCentralManager )
+                  centralManager: CBCentralManager,
+                  deviceType: DeviceType)
     {
         self.name = name
         self.identifier = identifier
@@ -195,6 +198,7 @@ public class Glasses {
         self.flowControlState = .on
         self.rxCharacteristicState = .available
         self.peripheralDelegate = PeripheralDelegate()
+        self.deviceType = deviceType
         self.peripheralDelegate.parent = self
         self.commandQueue.set(parent: self)
         self.peripheral.delegate = self.peripheralDelegate
@@ -214,7 +218,8 @@ public class Glasses {
             identifier: discoveredGlasses.identifier,
             manufacturerId: discoveredGlasses.manufacturerId,
             peripheral: discoveredGlasses.peripheral,
-            centralManager: discoveredGlasses.centralManager
+            centralManager: discoveredGlasses.centralManager,
+            deviceType: discoveredGlasses.deviceType
         )
         self.disconnectionCallback = discoveredGlasses.disconnectionCallback
     }
@@ -498,7 +503,7 @@ public class Glasses {
     ///
     public func getSerializedGlasses() throws -> SerializedGlasses
     {
-        return try UnserializedGlasses(id: identifier.description, name: name, manId: manufacturerId).serialize()
+        return try UnserializedGlasses(id: identifier.description, name: name, manId: manufacturerId, type: self.deviceType.rawValue).serialize()
     }
 
     // MARK: - Utility commands
