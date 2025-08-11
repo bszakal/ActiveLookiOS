@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum DeviceType: String {
+public enum DeviceType: String {
     case glasses
     case simulator
 }

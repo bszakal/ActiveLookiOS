@@ -163,7 +163,7 @@ public class ActiveLookSDK {
     ///
     public func startScanning(onGlassesDiscovered glassesDiscoveredCallback: @escaping (DiscoveredGlasses) -> Void,
                               onScanError scanErrorCallback: @escaping (Error) -> Void,
-                              _ caller: String? = nil)
+                              _ caller: String? = nil, forDeviceType type: DeviceType = .glasses)
     {
         guard centralManager.state == .poweredOn else {
             if self.didAskForScan == nil && caller == nil {
@@ -190,7 +190,10 @@ public class ActiveLookSDK {
         print("starting scan")
 
         // Scanning with services list not working
-        centralManager.scanForPeripherals(withServices: nil,
+        //For Mac App (the simulator) you can only discover the device if you specify the services you are looking for
+        let services = type == .glasses ? [CBUUID.ActiveLookCommandsInterfaceService] : nil
+        
+        centralManager.scanForPeripherals(withServices: services,
                                           options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
 
@@ -385,10 +388,8 @@ public class ActiveLookSDK {
             if manufacturerData[0] == 0xFA && manufacturerData[1] == 0xDA {
                 return .success(.glasses)
             }
-        } else if let name = advertisementData["kCBAdvDataLocalName"] as? String {
-            if name == "ActiveLook Glasses" {
-                return .success(.simulator)
-            }
+        } else if let serviceUUIDs = advertisementData["kCBAdvDataServiceUUIDs"] as? [CBUUID], let firstService = serviceUUIDs.first, firstService == CBUUID.ActiveLookCommandsInterfaceService {
+            return .success(.simulator)
         }
         return .failure(PeripheralError.nonActiveLookCompatabileDevice)
     }
