@@ -24,6 +24,7 @@ internal struct UnserializedGlasses: Codable {
     var id: String
     var name: String
     var manId: String
+    var type: String
 
     func serialize() throws -> SerializedGlasses {
         do {

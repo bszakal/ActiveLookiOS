@@ -163,7 +163,7 @@ public class ActiveLookSDK {
     ///
     public func startScanning(onGlassesDiscovered glassesDiscoveredCallback: @escaping (DiscoveredGlasses) -> Void,
                               onScanError scanErrorCallback: @escaping (Error) -> Void,
-                              _ caller: String? = nil)
+                              _ caller: String? = nil, forDeviceType type: DeviceType = .glasses)
     {
         guard centralManager.state == .poweredOn else {
             if self.didAskForScan == nil && caller == nil {
@@ -190,7 +190,10 @@ public class ActiveLookSDK {
         print("starting scan")
 
         // Scanning with services list not working
-        centralManager.scanForPeripherals(withServices: nil,
+        //For Mac App (the simulator) you can only discover the device if you specify the services you are looking for
+        let services = type == .simulator ? [CBUUID.ActiveLookCommandsInterfaceService] : nil
+        
+        centralManager.scanForPeripherals(withServices: services,
                                           options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
 
@@ -380,11 +383,15 @@ public class ActiveLookSDK {
 
     // MARK: - Private methods
     
-    private func peripheralIsActiveLookGlasses(peripheral: CBPeripheral, advertisementData: [String: Any]) -> Bool {
+    private func peripheralIsActiveLookGlasses(peripheral: CBPeripheral, advertisementData: [String: Any]) -> Result<DeviceType, Error> {
         if let manufacturerData = advertisementData["kCBAdvDataManufacturerData"] as? Data, manufacturerData.count >= 2 {
-            return manufacturerData[0] == 0xFA && manufacturerData[1] == 0xDA
+            if manufacturerData[0] == 0xFA && manufacturerData[1] == 0xDA {
+                return .success(.glasses)
+            }
+        } else if let serviceUUIDs = advertisementData["kCBAdvDataServiceUUIDs"] as? [CBUUID], let firstService = serviceUUIDs.first, firstService == CBUUID.ActiveLookCommandsInterfaceService {
+            return .success(.simulator)
         }
-        return false
+        return .failure(PeripheralError.nonActiveLookCompatabileDevice)
     }
 
     private func retrieveBLEConnectedGlasses() -> [CBPeripheral] {
@@ -435,6 +442,17 @@ public class ActiveLookSDK {
             fatalError("discoveredGlasses not found")
         }
 
+        let successfulUpdate = {
+            discoveredGlasses.connectionCallback?(glasses)
+            self.updateParameters.notify(.upToDate)
+            self.updateParameters.reset()
+        }
+        
+        guard glasses.deviceType != .simulator else {
+            successfulUpdate()
+            return
+        }
+
         updater?.update(
             glasses,
             onReboot:
@@ -454,9 +472,8 @@ public class ActiveLookSDK {
                     dlog(message: "UPDATER DONE",
                          line: #line, function: #function, file: #fileID)
 
-                    discoveredGlasses.connectionCallback?(glasses)
-                    self.updateParameters.notify(.upToDate)
-                    self.updateParameters.reset()   // FIXME: can trigger warning '[connection] nw_resolver_start_query_timer_block_invoke [C1] Query fired: did not receive all answers in time for... in Downloader.swift'
+                    successfulUpdate()
+                    // FIXME: can trigger warning '[connection] nw_resolver_start_query_timer_block_invoke [C1] Query fired: did not receive all answers in time for... in Downloader.swift'
                 },
             onError:
                 { error in
@@ -546,8 +563,9 @@ public class ActiveLookSDK {
             guard let parent = parent else {
                 fatalError("cannot retrieve parent instance")
             }
-            guard parent.peripheralIsActiveLookGlasses(peripheral: peripheral,
-                                                       advertisementData: advertisementData)
+            
+            guard let compatibleDevice =  try? parent.peripheralIsActiveLookGlasses(peripheral: peripheral,
+                                                                          advertisementData: advertisementData).get()
             else {
                 // print("ignoring non ActiveLook peripheral")
                 return
@@ -555,7 +573,8 @@ public class ActiveLookSDK {
 
             let discoveredGlasses = DiscoveredGlasses(peripheral: peripheral,
                                                       centralManager: central,
-                                                      advertisementData: advertisementData)
+                                                      advertisementData: advertisementData,
+                                                      type: compatibleDevice)
 
             guard parent.discoveredGlasses(fromPeripheral: peripheral) == nil
             else {
@@ -590,16 +609,24 @@ public class ActiveLookSDK {
             // and get rid of the discover/didDiscover dance?
 
             let glasses = Glasses(discoveredGlasses: discoveredGlasses)
+            
+            let onSuccess: () -> Void = {
+                if glasses.deviceType == .glasses {
+                    glasses.fixInDeviceCmdStack {
+                        glasses.cfgSet(name: "ALooK")
+                        parent.updateInitializedGlasses(glasses)
+                    }
+                } else {
+                    parent.updateInitializedGlasses(glasses)
+                }
+            }
 
             let glassesInitializer = GlassesInitializer()
             glassesInitializer.initialize( glasses,
                                            onSuccess:
                                             {
                 print("central manager did connect to glasses \(discoveredGlasses.name)")
-                //glasses.fixInDeviceCmdStack {
-                    glasses.cfgSet(name: "ALooK")
-                    parent.updateInitializedGlasses(glasses)
-                //}
+                onSuccess()
             },
                                            onError:
                                             { (error) in
@@ -673,5 +700,11 @@ public class ActiveLookSDK {
             glasses.connectionErrorCallback?(error ?? ActiveLookError.unknownError)
             glasses.connectionErrorCallback = nil
         }
+    }
+}
+
+extension ActiveLookSDK {
+    enum PeripheralError: Error {
+        case nonActiveLookCompatabileDevice
     }
 }
