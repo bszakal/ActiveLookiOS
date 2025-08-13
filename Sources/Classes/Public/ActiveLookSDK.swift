@@ -191,7 +191,7 @@ public class ActiveLookSDK {
 
         // Scanning with services list not working
         //For Mac App (the simulator) you can only discover the device if you specify the services you are looking for
-        let services = type == .glasses ? [CBUUID.ActiveLookCommandsInterfaceService] : nil
+        let services = type == .simulator ? [CBUUID.ActiveLookCommandsInterfaceService] : nil
         
         centralManager.scanForPeripherals(withServices: services,
                                           options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
